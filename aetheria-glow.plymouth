@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Aetheria Inner Glow
+Description=Original cosmic mountain artwork with a subtle breathing inner glow
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/aetheria-glow
+ScriptFile=/usr/share/plymouth/themes/aetheria-glow/aetheria-glow.script

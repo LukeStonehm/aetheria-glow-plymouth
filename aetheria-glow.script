@@ -1,0 +1,227 @@
+# Aetheria Inner Glow, revision 2. No keyboard callback receives passphrase data.
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+Plymouth.SetRefreshRate(50);
+wallpaper_source = Image("background.png");
+glow_source = Image("inner-glow.png");
+panel_source = Image("panel.png");
+wallpaper = Sprite();
+glow = Sprite();
+panel = Sprite();
+prompt_sprite = Sprite();
+entry_sprite = Sprite();
+hint_sprite = Sprite();
+message_sprite = Sprite();
+message_panel = Sprite();
+phase = 0;
+last_w = 0;
+last_h = 0;
+ox = 0;
+oy = 0;
+status = "normal";
+current_prompt = "";
+current_entry = "";
+current_bullets = 0;
+current_message = "";
+
+fun label(text, font)
+{
+    return Image.Text(text, 0.85, 0.94, 1, 1, font, "center");
+}
+# Wrap complete words, preserving UTF-8 byte sequences. A pathological unbroken
+# identifier becomes [...] rather than shrinking all text. Esc shows details.
+fun wrap_text(text, limit, font, max_lines)
+{
+    local.result = "";
+    local.line = "";
+    local.word = "";
+    local.lines = 1;
+    local.pos = 0;
+    local.usable = Math.Max(1, limit-label(" ...", font).GetWidth());
+    while (1)
+    {
+        local.ch = text.CharAt(local.pos);
+        local.pos++;
+        # The final delimiter is a literal tab; this interpreter has no \t escape.
+        if (local.ch != "" && local.ch != " " && local.ch != "\n" && local.ch != "	")
+        {
+            local.word += local.ch;
+            continue;
+        }
+        if (local.word != "")
+        {
+            if (label(local.word, font).GetWidth() > local.usable) local.word = "[...]";
+            local.candidate = local.word;
+            if (local.line != "") local.candidate = local.line+" "+local.word;
+            if (local.line != "" && label(local.candidate, font).GetWidth() > local.usable)
+            {
+                if (local.lines >= max_lines) return local.result+local.line+" ...";
+                local.result += local.line+"\n";
+                local.lines++;
+                local.line = local.word;
+            }
+            else local.line = local.candidate;
+            local.word = "";
+        }
+        if (local.ch == "") return local.result+local.line;
+        if (local.ch == "\n" && local.line != "")
+        {
+            if (local.lines >= max_lines) return local.result+local.line+" ...";
+            local.result += local.line+"\n";
+            local.lines++;
+            local.line = "";
+        }
+    }
+}
+fun render_message()
+{
+    message_sprite.SetOpacity(0);
+    message_panel.SetOpacity(0);
+    global.message_height = 0;
+    if (current_message == "") return;
+    local.lines = 2;
+    if (last_h < 600) local.lines = 1;
+    local.image = label(wrap_text(current_message, text_w, font_name, local.lines), font_name);
+    global.message_height = local.image.GetHeight()+padding*2;
+    local.y = oy+last_h-padding-message_height;
+    message_panel.SetImage(panel_source.Scale(panel_w, message_height));
+    message_panel.SetPosition(ox+(last_w-panel_w)/2, local.y, 100);
+    message_sprite.SetImage(local.image);
+    message_sprite.SetPosition(ox+(last_w-local.image.GetWidth())/2, local.y+padding, 101);
+    message_panel.SetOpacity(1);
+    message_sprite.SetOpacity(1);
+}
+fun render_prompt()
+{
+    panel.SetOpacity(0);
+    prompt_sprite.SetOpacity(0);
+    entry_sprite.SetOpacity(0);
+    hint_sprite.SetOpacity(0);
+    if (status == "normal") return;
+    local.lines = 4;
+    if (last_h < 600) local.lines = 2;
+    local.prompt_image = label(wrap_text(current_prompt, text_w, font_name, local.lines), font_name);
+    local.entry = current_entry;
+    if (status == "password")
+    {
+        local.entry = "";
+        local.capacity = Math.Min(48, Math.Max(1, Math.Int((text_w-label("...", entry_font).GetWidth())/label("*", entry_font).GetWidth())));
+        local.count = Math.Min(current_bullets, local.capacity);
+        for (local.i=0; local.i<local.count; local.i++) local.entry += "*";
+        if (current_bullets > local.capacity) local.entry += "...";
+        if (current_bullets == 0) local.entry = "Enter passphrase";
+    }
+    if (local.entry == "") local.entry = " ";
+    if (status == "password") local.entry_image = label(local.entry, entry_font);
+    else local.entry_image = label(wrap_text(local.entry, text_w, entry_font, 2), entry_font);
+    local.hint_image = label("Enter: submit | Esc: details", hint_font);
+    local.height = local.prompt_image.GetHeight()+local.entry_image.GetHeight()+local.hint_image.GetHeight()+padding*4;
+    local.bottom = oy+last_h-padding;
+    if (message_height > 0) local.bottom -= message_height+padding;
+    local.y = Math.Max(oy+padding, Math.Min(oy+last_h*0.66, local.bottom-local.height));
+    panel.SetImage(panel_source.Scale(panel_w, local.height));
+    panel.SetPosition(ox+(last_w-panel_w)/2, local.y, 100);
+    prompt_sprite.SetImage(local.prompt_image);
+    prompt_sprite.SetPosition(ox+(last_w-local.prompt_image.GetWidth())/2, local.y+padding, 101);
+    local.y += padding+local.prompt_image.GetHeight()+padding;
+    entry_sprite.SetImage(local.entry_image);
+    entry_sprite.SetPosition(ox+(last_w-local.entry_image.GetWidth())/2, local.y, 101);
+    local.y += local.entry_image.GetHeight()+padding;
+    hint_sprite.SetImage(local.hint_image);
+    hint_sprite.SetPosition(ox+(last_w-local.hint_image.GetWidth())/2, local.y, 101);
+    panel.SetOpacity(1);
+    prompt_sprite.SetOpacity(1);
+    entry_sprite.SetOpacity(1);
+    hint_sprite.SetOpacity(1);
+}
+fun layout()
+{
+    global.last_w = Window.GetWidth();
+    global.last_h = Window.GetHeight();
+    global.ox = Window.GetX();
+    global.oy = Window.GetY();
+    if (last_w < 1 || last_h < 1) return;
+    local.scale = Math.Min(last_w/wallpaper_source.GetWidth(), last_h/wallpaper_source.GetHeight());
+    local.width = Math.Max(1, Math.Int(wallpaper_source.GetWidth()*local.scale));
+    local.height = Math.Max(1, Math.Int(wallpaper_source.GetHeight()*local.scale));
+    local.x = ox+(last_w-local.width)/2;
+    local.y = oy+(last_h-local.height)/2;
+    wallpaper.SetImage(wallpaper_source.Scale(local.width, local.height));
+    wallpaper.SetPosition(local.x, local.y, -100);
+    glow.SetImage(glow_source.Scale(local.width, local.height));
+    glow.SetPosition(local.x, local.y, -99);
+    global.padding = 16;
+    global.panel_w = Math.Max(1, Math.Int(last_w*0.90));
+    global.text_w = Math.Max(1, panel_w-padding*2);
+    global.font_size = Math.Clamp(Math.Int(last_h/48), 16, 24);
+    global.font_name = "Sans "+font_size;
+    global.entry_font = "Monospace "+font_size;
+    global.hint_font = "Sans 14";
+    # Cached prompt, masked count, question entry AND message are laid out again.
+    render_message();
+    render_prompt();
+}
+fun refresh()
+{
+    if (last_w != Window.GetWidth() || last_h != Window.GetHeight() ||
+        ox != Window.GetX() || oy != Window.GetY()) layout();
+    global.phase += 0.03141592653589793;
+    if (phase >= 6.283185307179586) global.phase -= 6.283185307179586;
+    glow.SetOpacity(0.18+0.72*(1-Math.Cos(phase))/2);
+}
+fun normal()
+{
+    global.status = "normal";
+    global.current_prompt = "";
+    global.current_entry = "";
+    global.current_bullets = 0;
+    if (last_w > 0 && last_h > 0) render_prompt();
+}
+fun password(prompt, bullets)
+{
+    global.status = "password";
+    global.current_prompt = prompt;
+    if (!prompt) global.current_prompt = "Unlock encrypted disk";
+    global.current_entry = "";
+    global.current_bullets = Math.Max(0, bullets);
+    if (last_w > 0 && last_h > 0) render_prompt();
+}
+fun question(prompt, entry)
+{
+    global.status = "question";
+    global.current_prompt = prompt;
+    if (!prompt) global.current_prompt = "Question";
+    global.current_entry = entry;
+    if (!entry) global.current_entry = "";
+    global.current_bullets = 0;
+    if (last_w > 0 && last_h > 0) render_prompt();
+}
+fun display_message(text)
+{
+    global.current_message = text;
+    if (!text) global.current_message = "";
+    if (last_w > 0 && last_h > 0) { render_message(); render_prompt(); }
+}
+fun hide_message(text)
+{
+    if (text == current_message) display_message("");
+}
+fun system_update(progress)
+{
+    display_message("Installing updates: "+Math.Clamp(Math.Int(progress), 0, 100)+"%");
+}
+panel.SetOpacity(0);
+prompt_sprite.SetOpacity(0);
+entry_sprite.SetOpacity(0);
+hint_sprite.SetOpacity(0);
+message_panel.SetOpacity(0);
+message_sprite.SetOpacity(0);
+glow.SetOpacity(0.18);
+layout();
+Plymouth.SetRefreshFunction(refresh);
+Plymouth.SetDisplayNormalFunction(normal);
+Plymouth.SetDisplayPasswordFunction(password);
+Plymouth.SetDisplayQuestionFunction(question);
+Plymouth.SetDisplayMessageFunction(display_message);
+Plymouth.SetHideMessageFunction(hide_message);
+Plymouth.SetSystemUpdateFunction(system_update);
