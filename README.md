@@ -12,6 +12,8 @@ The artwork comes from [Aetheria by Dizziee](https://github.com/JJDizz1L/aetheri
 
 Written for and tested on **EndeavourOS with dracut, systemd-boot, and LUKS disk encryption**. Other Arch-based setups should work, but the rebuild and recovery commands below may differ.
 
+Disk encryption is optional. Without it you still get the artwork and glow during boot, just no password prompt. On a fast machine the splash may only show for a second or two, so the preview below is the best way to see it.
+
 You need:
 
 | Package | Why |
