@@ -9,9 +9,17 @@ fi
 for tool in plymouth plymouthd unshare mount umount mountpoint timeout pgrep tty stty mktemp install readlink; do
     command -v "$tool" >/dev/null || { echo "Missing prerequisite: $tool" >&2; exit 1; }
 done
-vt=$(tty) || { echo 'A local text VT is required.' >&2; exit 1; }
-if [[ ! $vt =~ ^/dev/tty[0-9]+$ ]]; then
-    echo 'Switch to a local text VT (for example Ctrl+Alt+F3), log in, then retry.' >&2
+input_tty=$(tty) || { echo 'A local text VT is required.' >&2; exit 1; }
+vt=$input_tty
+# sudo's use_pty gives us /dev/pts/N even when invoked from a real VT.
+# SUDO_TTY identifies the invoking console; stdin must stay on sudo's PTY
+# so that sudo and this helper do not compete to read the physical keyboard.
+if [[ $input_tty =~ ^/dev/pts/[0-9]+$ && -n ${SUDO_TTY:-} ]]; then
+    vt=$SUDO_TTY
+fi
+if [[ ! $vt =~ ^/dev/tty[1-9][0-9]*$ || ! -c $vt ]]; then
+    echo "A local text VT is required (input: $input_tty; invoking terminal: $vt)." >&2
+    echo 'Switch to a local text VT (for example Ctrl+Alt+F3), log in, then run sudo bash ./test-preview.sh without redirection.' >&2
     exit 1
 fi
 if timeout --kill-after=1s 3s plymouth --ping >/dev/null 2>&1 || pgrep -x plymouthd >/dev/null; then
@@ -28,12 +36,18 @@ for option in kernel-command-line no-daemon no-boot-log pid-file tty; do
     [[ $help == *"--$option"* ]] || { echo "Installed plymouthd lacks --$option; stop and check its documentation." >&2; exit 1; }
 done
 echo 'Save desktop work first. This preview temporarily takes over this VT.'
+printf 'Preview console: %s (input terminal: %s).\n' "$vt" "$input_tty"
 echo 'Use invented input only, such as dummy-test. Never enter your real passphrase.'
 echo 'First dummy submission is rejected; the second is accepted (no disk is accessed).'
 echo 'Try backspace, a long input, and Esc twice to switch to details and back.'
 echo 'A second dummy question is unmasked. Each request expires after 40 seconds.'
 echo 'The entire preview stops after 120 seconds. Another VT: sudo plymouth quit'
-read -r -p 'Type PREVIEW to start: ' answer
+# Read the controlling terminal, never a redirected physical VT under sudo.
+# Bound confirmation too: the daemon watchdog only starts after this prompt.
+if ! read -r -t 30 -p 'Type PREVIEW within 30 seconds to start: ' answer < /dev/tty; then
+    echo 'Preview cancelled: no confirmation received; no daemon was started.' >&2
+    exit 1
+fi
 [[ $answer == PREVIEW ]] || exit 0
 saved_stty=$(stty -g < "$vt")
 

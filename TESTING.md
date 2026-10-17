@@ -28,6 +28,8 @@ sudo bash ./test-preview.sh
 
 Read its notice and type `PREVIEW` to start. This is the only helper to run for the pre-install test. No `plymouth-set-default-theme` command or boot rebuild is needed.
 
+Confirmation expires after 30 seconds without starting a daemon. With sudo's pseudo-terminal mode, the helper may show `/dev/pts/N` as its input terminal; it uses `SUDO_TTY` to identify the actual `/dev/ttyN` preview console. Run the command exactly as above: do not redirect input from `/dev/tty3`, disable sudo's pseudo-terminal protection, or run from SSH/a desktop terminal to bypass the console check.
+
 The sequence is:
 
 1. Artwork and breathing border appear for about three seconds. Confirm it is the Aetheria artwork, not a fallback theme or just a text console. A client command succeeding does not prove the intended theme loaded.

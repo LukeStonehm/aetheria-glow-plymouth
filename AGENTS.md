@@ -13,6 +13,7 @@
 - From the repository root: `bash -n test-preview.sh` checks shell syntax; `sha256sum -c MANIFEST.sha256` checks packaged-file integrity, not runtime correctness. Update affected manifest entries when intentionally changing listed files.
 - `VALIDATION.md` records historical upstream-interpreter tests, but their harness is not included. Do not report those scenarios as newly run or treat shell syntax/integrity checks as a Plymouth runtime test.
 - For a real dummy preview, follow `TESTING.md`: `sudo bash ./test-preview.sh` from a local `/dev/ttyN`, not SSH or a desktop terminal. It requires installed Plymouth with script and label/font support, refuses existing daemons, and requires typing `PREVIEW`.
+- With sudo `use_pty`, `tty` reports `/dev/pts/N`; `SUDO_TTY` identifies the real preview VT. Keep confirmation on the controlling terminal, never redirect stdin to the physical VT: sudo also reads it and can swallow input/signals.
 - Use invented input only. The preview rejects the first submission, accepts the second, then asks an unmasked question. Each request times out after 40 seconds; the whole preview after 120. A timeout is not a pass, and successful client commands do not prove the intended artwork loaded.
 - Do not bypass mount-namespace isolation to run in a restricted environment. Real VT/GPU behavior and encrypted boot require local validation; report them as untested when unavailable.
 
